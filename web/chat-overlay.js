@@ -309,6 +309,84 @@
     display: flex;
     gap: 9px;
     background: rgba(0,0,0,.18);
+    position: relative;
+}
+
+.nabris-chat-tool {
+    width: 42px;
+    min-width: 42px;
+    height: 42px;
+    padding: 0;
+    border: 1px solid rgba(255,255,255,.12);
+    border-radius: 11px;
+    background: #222;
+    color: #fff;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font: inherit;
+}
+
+.nabris-chat-tool:hover {
+    border-color: ${CONFIG.green};
+}
+
+#nabris-chat-emoji-picker {
+    position: absolute;
+    left: 12px;
+    bottom: 66px;
+    width: 268px;
+    padding: 10px;
+    display: none;
+    grid-template-columns: repeat(7, 34px);
+    grid-auto-rows: 34px;
+    gap: 4px;
+    justify-content: center;
+    background: #171717;
+    border: 1px solid rgba(255,255,255,.12);
+    border-radius: 12px;
+    box-shadow: 0 12px 35px rgba(0,0,0,.55);
+    z-index: 10;
+}
+
+#nabris-chat-emoji-picker.open {
+    display: grid;
+}
+
+.nabris-chat-emoji-item {
+    width: 34px;
+    height: 34px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 7px;
+    cursor: pointer;
+    user-select: none;
+    font-family:
+        "Apple Color Emoji",
+        "Segoe UI Emoji",
+        "Noto Color Emoji",
+        sans-serif;
+    font-size: 21px;
+    line-height: 1;
+}
+
+.nabris-chat-emoji-item:hover {
+    background: rgba(50,153,103,.18);
+}
+
+.nabris-chat-bubble-gif {
+    padding: 4px !important;
+    background: transparent !important;
+}
+
+.nabris-chat-gif {
+    display: block;
+    max-width: 250px;
+    max-height: 280px;
+    border-radius: 10px;
+    object-fit: contain;
 }
 
 #nabris-chat-input {
@@ -436,6 +514,48 @@
             'nabris-chat-composer'
         );
 
+        const emojiButton = createElement(
+            'button',
+            'nabris-chat-tool',
+            '☺'
+        );
+        emojiButton.type = 'button';
+        emojiButton.title = 'Emoticon';
+
+        const gifButton = createElement(
+            'button',
+            'nabris-chat-tool',
+            'GIF'
+        );
+        gifButton.type = 'button';
+        gifButton.title = 'Invia GIF';
+
+        const emojiPicker = createElement('div');
+        emojiPicker.id = 'nabris-chat-emoji-picker';
+
+        const emojis = [
+            '😀','😂','😊','😍','😎','🤔','😅',
+            '😭','😡','👍','👎','👏','🙏','👀',
+            '❤','💚','🔥','⭐','🎉','🎬','🍿'
+        ];
+
+        for (const emoji of emojis) {
+            const item = createElement(
+                'span',
+                'nabris-chat-emoji-item',
+                emoji
+            );
+
+            item.setAttribute('role', 'button');
+
+            item.addEventListener('click', event => {
+                event.stopPropagation();
+                insertEmoji(emoji);
+            });
+
+            emojiPicker.appendChild(item);
+        }
+
         const input = document.createElement('input');
         input.id = 'nabris-chat-input';
         input.type = 'text';
@@ -451,7 +571,13 @@
         send.id = 'nabris-chat-send';
         send.type = 'button';
 
-        composer.append(input, send);
+        composer.append(
+            emojiPicker,
+            emojiButton,
+            gifButton,
+            input,
+            send
+        );
         panel.append(header, error, messages, composer);
 
         document.body.append(button, panel);
@@ -460,12 +586,127 @@
         close.addEventListener('click', closePanel);
         send.addEventListener('click', sendMessage);
 
+        emojiButton.addEventListener('click', event => {
+            event.stopPropagation();
+            emojiPicker.classList.toggle('open');
+        });
+
+        gifButton.addEventListener('click', event => {
+            event.stopPropagation();
+            emojiPicker.classList.remove('open');
+            sendGif();
+        });
+
         input.addEventListener('keydown', event => {
             if (event.key === 'Enter') {
                 event.preventDefault();
                 sendMessage();
             }
         });
+    }
+
+    function insertEmoji(emoji) {
+        const input = document.getElementById(
+            'nabris-chat-input'
+        );
+
+        if (!input) {
+            return;
+        }
+
+        const start =
+            input.selectionStart ?? input.value.length;
+
+        const end =
+            input.selectionEnd ?? input.value.length;
+
+        input.value =
+            input.value.slice(0, start) +
+            emoji +
+            input.value.slice(end);
+
+        const cursor = start + emoji.length;
+
+        input.focus();
+        input.setSelectionRange(cursor, cursor);
+
+        document
+            .getElementById('nabris-chat-emoji-picker')
+            ?.classList.remove('open');
+    }
+
+    function normalizeGifUrl(value) {
+        try {
+            const url = new URL(value.trim());
+
+            if (url.protocol !== 'https:') {
+                return null;
+            }
+
+            const path =
+                url.pathname.toLowerCase();
+
+            if (!path.endsWith('.gif')) {
+                return null;
+            }
+
+            return url.toString();
+
+        } catch {
+            return null;
+        }
+    }
+
+    function parseGifToken(text) {
+        const match =
+            /^\[\[gif:(https:\/\/[^\]]+)\]\]$/.exec(
+                text || ''
+            );
+
+        if (!match) {
+            return null;
+        }
+
+        return normalizeGifUrl(match[1]);
+    }
+
+    async function sendGif() {
+        const value = window.prompt(
+            'Incolla il link diretto HTTPS della GIF (.gif):'
+        );
+
+        if (!value) {
+            return;
+        }
+
+        const url = normalizeGifUrl(value);
+
+        if (!url) {
+            showError(
+                'Il link deve essere HTTPS e terminare con .gif'
+            );
+            return;
+        }
+
+        showError('');
+
+        try {
+            await request('NabrisChat/Messages', {
+                method: 'POST',
+                json: {
+                    text: `[[gif:${url}]]`
+                }
+            });
+
+            await refreshMessages(true);
+
+        } catch (error) {
+            console.error('[Nabris Chat]', error);
+
+            showError(
+                'Invio della GIF non riuscito.'
+            );
+        }
     }
 
     function togglePanel() {
@@ -496,6 +737,10 @@
 
         document
             .getElementById('nabris-chat-panel')
+            ?.classList.remove('open');
+
+        document
+            .getElementById('nabris-chat-emoji-picker')
             ?.classList.remove('open');
     }
 
@@ -644,9 +889,35 @@
                 'div',
                 `nabris-chat-bubble${
                     deleted ? ' nabris-chat-deleted' : ''
-                }`,
-                deleted ? 'Messaggio eliminato' : text
+                }`
             );
+
+            if (deleted) {
+                bubble.textContent =
+                    'Messaggio eliminato';
+            } else {
+                const gifUrl = parseGifToken(text);
+
+                if (gifUrl) {
+                    bubble.classList.add(
+                        'nabris-chat-bubble-gif'
+                    );
+
+                    const image =
+                        document.createElement('img');
+
+                    image.className =
+                        'nabris-chat-gif';
+
+                    image.src = gifUrl;
+                    image.alt = 'GIF';
+                    image.loading = 'lazy';
+
+                    bubble.appendChild(image);
+                } else {
+                    bubble.textContent = text;
+                }
+            }
 
             row.append(meta, bubble);
             container.appendChild(row);
@@ -781,6 +1052,20 @@
             );
         }
     }
+
+    document.addEventListener('click', event => {
+        const picker =
+            document.getElementById(
+                'nabris-chat-emoji-picker'
+            );
+
+        if (
+            picker &&
+            !picker.contains(event.target)
+        ) {
+            picker.classList.remove('open');
+        }
+    });
 
     async function init() {
         try {
