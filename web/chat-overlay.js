@@ -10,7 +10,12 @@
     const CONFIG = {
         pollInterval: 1500,
         maxLength: 500,
-        green: '#329967'
+        green: '#329967',
+        background: '#07131f',
+        panel: '#0b1822',
+        surface: '#131f28',
+        surfaceAlt: '#1a252d',
+        border: '#123747'
     };
 
     let apiClient = null;
@@ -178,13 +183,13 @@
     bottom: 92px;
     width: 390px;
     height: min(620px, calc(100vh - 130px));
-    background: rgba(19,19,19,.98);
+    background: rgba(7,19,31,.98);
     color: #fff;
     border-radius: 16px;
     overflow: hidden;
     z-index: 99999;
     box-shadow: 0 16px 55px rgba(0,0,0,.6);
-    border: 1px solid rgba(255,255,255,.08);
+    border: 1px solid #123747;
     display: none;
     flex-direction: column;
     backdrop-filter: blur(18px);
@@ -199,8 +204,8 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    background: rgba(50,153,103,.12);
-    border-bottom: 1px solid rgba(50,153,103,.28);
+    background: rgba(11,24,34,.97);
+    border-bottom: 1px solid #123747;
 }
 
 .nabris-chat-title {
@@ -264,7 +269,7 @@
     max-width: 82%;
     border-radius: 13px 13px 13px 4px;
     padding: 9px 12px;
-    background: #292929;
+    background: #1a252d;
     line-height: 1.4;
     word-break: break-word;
     white-space: pre-wrap;
@@ -308,14 +313,15 @@
     border-top: 1px solid rgba(255,255,255,.08);
     display: flex;
     gap: 9px;
-    background: rgba(0,0,0,.18);
+    background: #0b1822;
+    position: relative;
 }
 
 #nabris-chat-input {
     flex: 1;
     min-width: 0;
-    border: 1px solid rgba(255,255,255,.12);
-    background: #222;
+    border: 1px solid #1b4658;
+    background: #101d26;
     color: #fff;
     border-radius: 11px;
     padding: 11px 13px;
@@ -349,6 +355,60 @@
     color: #ffb3b3;
     font-size: 12px;
     display: none;
+}
+
+
+#nabris-chat-emoji {
+    width: 42px;
+    min-width: 42px;
+    border: 1px solid #1b4658;
+    border-radius: 11px;
+    background: #101d26;
+    color: rgba(255,255,255,.82);
+    cursor: pointer;
+    font-size: 21px;
+    transition: background .15s ease, border-color .15s ease;
+}
+
+#nabris-chat-emoji:hover {
+    background: #162832;
+    border-color: #329967;
+}
+
+#nabris-chat-emoji-picker {
+    position: absolute;
+    left: 12px;
+    bottom: 68px;
+    width: 286px;
+    padding: 10px;
+    display: none;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 4px;
+    background: #0b1822;
+    border: 1px solid #1b4658;
+    border-radius: 13px;
+    box-shadow: 0 12px 35px rgba(0,0,0,.55);
+    z-index: 5;
+}
+
+#nabris-chat-emoji-picker.open {
+    display: grid;
+}
+
+.nabris-chat-emoji-item {
+    height: 34px;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    cursor: pointer;
+    font-size: 21px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.nabris-chat-emoji-item:hover {
+    background: rgba(50,153,103,.18);
 }
 
 @media (max-width: 600px) {
@@ -436,6 +496,43 @@
             'nabris-chat-composer'
         );
 
+        const emojiButton = createElement(
+            'button',
+            '',
+            '☺'
+        );
+        emojiButton.id = 'nabris-chat-emoji';
+        emojiButton.type = 'button';
+        emojiButton.title = 'Emoticon';
+
+        const emojiPicker = createElement('div');
+        emojiPicker.id = 'nabris-chat-emoji-picker';
+
+        const emojis = [
+            '😀','😂','🤣','😊','😍','🥰','😘',
+            '😎','🤔','🙄','😅','😭','😡','🤯',
+            '👍','👎','👏','🙌','🙏','💪','👀',
+            '❤️','💚','🔥','✨','🎉','💀','🤡',
+            '🎬','🍿','📺','🎵','🎮','⭐','💯'
+        ];
+
+        for (const emoji of emojis) {
+            const item = createElement(
+                'button',
+                'nabris-chat-emoji-item',
+                emoji
+            );
+
+            item.type = 'button';
+
+            item.addEventListener('click', event => {
+                event.stopPropagation();
+                insertEmoji(emoji);
+            });
+
+            emojiPicker.appendChild(item);
+        }
+
         const input = document.createElement('input');
         input.id = 'nabris-chat-input';
         input.type = 'text';
@@ -451,7 +548,12 @@
         send.id = 'nabris-chat-send';
         send.type = 'button';
 
-        composer.append(input, send);
+        composer.append(
+            emojiPicker,
+            emojiButton,
+            input,
+            send
+        );
         panel.append(header, error, messages, composer);
 
         document.body.append(button, panel);
@@ -460,12 +562,58 @@
         close.addEventListener('click', closePanel);
         send.addEventListener('click', sendMessage);
 
+        emojiButton.addEventListener('click', event => {
+            event.stopPropagation();
+            toggleEmojiPicker();
+        });
+
+        emojiPicker.addEventListener('click', event => {
+            event.stopPropagation();
+        });
+
         input.addEventListener('keydown', event => {
             if (event.key === 'Enter') {
                 event.preventDefault();
                 sendMessage();
             }
         });
+    }
+
+    function toggleEmojiPicker() {
+        document
+            .getElementById('nabris-chat-emoji-picker')
+            ?.classList.toggle('open');
+    }
+
+    function closeEmojiPicker() {
+        document
+            .getElementById('nabris-chat-emoji-picker')
+            ?.classList.remove('open');
+    }
+
+    function insertEmoji(emoji) {
+        const input = document.getElementById(
+            'nabris-chat-input'
+        );
+
+        if (!input) {
+            return;
+        }
+
+        const start = input.selectionStart ?? input.value.length;
+        const end = input.selectionEnd ?? input.value.length;
+
+        input.value =
+            input.value.slice(0, start) +
+            emoji +
+            input.value.slice(end);
+
+        const cursor = start + emoji.length;
+
+        input.focus();
+        input.setSelectionRange(cursor, cursor);
+
+        closeEmojiPicker();
     }
 
     function togglePanel() {
@@ -493,6 +641,7 @@
 
     function closePanel() {
         panelOpen = false;
+        closeEmojiPicker();
 
         document
             .getElementById('nabris-chat-panel')
@@ -781,6 +930,25 @@
             );
         }
     }
+
+    document.addEventListener('click', event => {
+        const picker = document.getElementById(
+            'nabris-chat-emoji-picker'
+        );
+
+        const button = document.getElementById(
+            'nabris-chat-emoji'
+        );
+
+        if (
+            picker &&
+            button &&
+            !picker.contains(event.target) &&
+            !button.contains(event.target)
+        ) {
+            closeEmojiPicker();
+        }
+    });
 
     async function init() {
         try {
