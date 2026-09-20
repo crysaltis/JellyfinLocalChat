@@ -10,7 +10,8 @@
     const CONFIG = {
         pollInterval: 1500,
         maxLength: 500,
-        green: '#329967'
+        green: '#329967',
+        giphyApiKey: '__GIPHY_API_KEY__'
     };
 
     let apiClient = null;
@@ -389,6 +390,134 @@
     object-fit: contain;
 }
 
+
+#nabris-chat-giphy-panel {
+    position: absolute;
+    left: 12px;
+    right: 12px;
+    bottom: 66px;
+    height: 330px;
+
+    display: none;
+    flex-direction: column;
+
+    background: #171717;
+    border: 1px solid rgba(255,255,255,.12);
+    border-radius: 12px;
+
+    box-shadow: 0 14px 40px rgba(0,0,0,.65);
+    overflow: hidden;
+
+    z-index: 20;
+}
+
+#nabris-chat-giphy-panel.open {
+    display: flex;
+}
+
+.nabris-chat-giphy-search {
+    display: flex;
+    gap: 8px;
+    padding: 10px;
+
+    border-bottom: 1px solid rgba(255,255,255,.08);
+}
+
+#nabris-chat-giphy-input {
+    flex: 1;
+    min-width: 0;
+
+    border: 1px solid rgba(255,255,255,.12);
+    background: #222;
+    color: #fff;
+
+    border-radius: 9px;
+    padding: 9px 11px;
+
+    outline: none;
+    font: inherit;
+}
+
+#nabris-chat-giphy-input:focus {
+    border-color: ${CONFIG.green};
+}
+
+#nabris-chat-giphy-search-button {
+    border: 0;
+    border-radius: 9px;
+
+    padding: 0 13px;
+
+    background: ${CONFIG.green};
+    color: #fff;
+
+    cursor: pointer;
+}
+
+#nabris-chat-giphy-results {
+    flex: 1;
+
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+
+    padding: 8px;
+
+    overflow-y: auto;
+}
+
+.nabris-chat-giphy-result {
+    position: relative;
+
+    min-height: 75px;
+
+    border-radius: 8px;
+    overflow: hidden;
+
+    background: #222;
+
+    cursor: pointer;
+}
+
+.nabris-chat-giphy-result:hover {
+    outline: 2px solid ${CONFIG.green};
+}
+
+.nabris-chat-giphy-result img {
+    width: 100%;
+    height: 100%;
+
+    min-height: 75px;
+
+    display: block;
+
+    object-fit: cover;
+}
+
+.nabris-chat-giphy-status {
+    grid-column: 1 / -1;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    color: rgba(255,255,255,.55);
+
+    text-align: center;
+    padding: 25px;
+}
+
+.nabris-chat-giphy-credit {
+    flex-shrink: 0;
+
+    padding: 5px 10px 8px;
+
+    color: rgba(255,255,255,.38);
+
+    text-align: right;
+    font-size: 10px;
+}
+
 #nabris-chat-input {
     flex: 1;
     min-width: 0;
@@ -556,6 +685,58 @@
             emojiPicker.appendChild(item);
         }
 
+        const giphyPanel = createElement('div');
+        giphyPanel.id = 'nabris-chat-giphy-panel';
+
+        const giphySearchRow = createElement(
+            'div',
+            'nabris-chat-giphy-search'
+        );
+
+        const giphyInput = document.createElement('input');
+        giphyInput.id = 'nabris-chat-giphy-input';
+        giphyInput.type = 'search';
+        giphyInput.maxLength = 50;
+        giphyInput.autocomplete = 'off';
+        giphyInput.placeholder = 'Cerca una GIF…';
+
+        const giphySearchButton = createElement(
+            'button',
+            '',
+            'Cerca'
+        );
+        giphySearchButton.id =
+            'nabris-chat-giphy-search-button';
+        giphySearchButton.type = 'button';
+
+        giphySearchRow.append(
+            giphyInput,
+            giphySearchButton
+        );
+
+        const giphyResults = createElement('div');
+        giphyResults.id = 'nabris-chat-giphy-results';
+
+        const giphyInitial = createElement(
+            'div',
+            'nabris-chat-giphy-status',
+            'Cerca una GIF'
+        );
+
+        giphyResults.appendChild(giphyInitial);
+
+        const giphyCredit = createElement(
+            'div',
+            'nabris-chat-giphy-credit',
+            'Powered by GIPHY'
+        );
+
+        giphyPanel.append(
+            giphySearchRow,
+            giphyResults,
+            giphyCredit
+        );
+
         const input = document.createElement('input');
         input.id = 'nabris-chat-input';
         input.type = 'text';
@@ -573,6 +754,7 @@
 
         composer.append(
             emojiPicker,
+            giphyPanel,
             emojiButton,
             gifButton,
             input,
@@ -593,9 +775,30 @@
 
         gifButton.addEventListener('click', event => {
             event.stopPropagation();
+
             emojiPicker.classList.remove('open');
-            sendGif();
+
+            giphyPanel.classList.toggle('open');
+
+            if (giphyPanel.classList.contains('open')) {
+                giphyInput.focus();
+            }
         });
+
+        giphySearchButton.addEventListener(
+            'click',
+            searchGiphy
+        );
+
+        giphyInput.addEventListener(
+            'keydown',
+            event => {
+                if (event.key === 'Enter') {
+                    event.preventDefault();
+                    searchGiphy();
+                }
+            }
+        );
 
         input.addEventListener('keydown', event => {
             if (event.key === 'Enter') {
@@ -632,6 +835,10 @@
 
         document
             .getElementById('nabris-chat-emoji-picker')
+            ?.classList.remove('open');
+
+        document
+            .getElementById('nabris-chat-giphy-panel')
             ?.classList.remove('open');
     }
 
@@ -670,21 +877,11 @@
         return normalizeGifUrl(match[1]);
     }
 
-    async function sendGif() {
-        const value = window.prompt(
-            'Incolla il link diretto HTTPS della GIF (.gif):'
-        );
+    async function sendGifUrl(url) {
+        const normalized = normalizeGifUrl(url);
 
-        if (!value) {
-            return;
-        }
-
-        const url = normalizeGifUrl(value);
-
-        if (!url) {
-            showError(
-                'Il link deve essere HTTPS e terminare con .gif'
-            );
+        if (!normalized) {
+            showError('GIF non valida.');
             return;
         }
 
@@ -694,9 +891,15 @@
             await request('NabrisChat/Messages', {
                 method: 'POST',
                 json: {
-                    text: `[[gif:${url}]]`
+                    text: `[[gif:${normalized}]]`
                 }
             });
+
+            document
+                .getElementById(
+                    'nabris-chat-giphy-panel'
+                )
+                ?.classList.remove('open');
 
             await refreshMessages(true);
 
@@ -705,6 +908,179 @@
 
             showError(
                 'Invio della GIF non riuscito.'
+            );
+        }
+    }
+
+    async function searchGiphy() {
+        const input = document.getElementById(
+            'nabris-chat-giphy-input'
+        );
+
+        const results = document.getElementById(
+            'nabris-chat-giphy-results'
+        );
+
+        if (!input || !results) {
+            return;
+        }
+
+        const query = input.value.trim();
+
+        if (!query) {
+            return;
+        }
+
+        /*
+         * Manteniamo anche il vecchio comportamento:
+         * se incolli direttamente una URL .gif, la invia.
+         */
+        const directGif = normalizeGifUrl(query);
+
+        if (directGif) {
+            await sendGifUrl(directGif);
+            return;
+        }
+
+        if (
+            !CONFIG.giphyApiKey ||
+            CONFIG.giphyApiKey ===
+                '__GIPHY_API_KEY__'
+        ) {
+            showError(
+                'Chiave GIPHY non configurata.'
+            );
+            return;
+        }
+
+        results.replaceChildren(
+            createElement(
+                'div',
+                'nabris-chat-giphy-status',
+                'Ricerca…'
+            )
+        );
+
+        try {
+            const params = new URLSearchParams({
+                api_key: CONFIG.giphyApiKey,
+                q: query,
+                limit: '12',
+                rating: 'pg-13',
+                lang: 'it',
+                bundle: 'messaging_non_clips'
+            });
+
+            const response = await fetch(
+                'https://api.giphy.com/v1/gifs/search?' +
+                params.toString(),
+                {
+                    method: 'GET',
+                    cache: 'no-store'
+                }
+            );
+
+            if (!response.ok) {
+                throw new Error(
+                    `GIPHY HTTP ${response.status}`
+                );
+            }
+
+            const payload = await response.json();
+            const gifs = payload?.data || [];
+
+            results.replaceChildren();
+
+            if (!gifs.length) {
+                results.appendChild(
+                    createElement(
+                        'div',
+                        'nabris-chat-giphy-status',
+                        'Nessun risultato'
+                    )
+                );
+
+                return;
+            }
+
+            for (const gif of gifs) {
+                const preview =
+                    gif?.images?.fixed_width?.url ||
+                    gif?.images?.downsized?.url ||
+                    gif?.images?.original?.url;
+
+                const sendUrl =
+                    gif?.images?.fixed_width?.url ||
+                    gif?.images?.downsized_medium?.url ||
+                    gif?.images?.original?.url;
+
+                if (!preview || !sendUrl) {
+                    continue;
+                }
+
+                const tile = createElement(
+                    'div',
+                    'nabris-chat-giphy-result'
+                );
+
+                tile.setAttribute(
+                    'role',
+                    'button'
+                );
+
+                tile.setAttribute(
+                    'tabindex',
+                    '0'
+                );
+
+                const image =
+                    document.createElement('img');
+
+                image.src = preview;
+                image.alt =
+                    gif?.title || 'GIF GIPHY';
+
+                image.loading = 'lazy';
+
+                tile.appendChild(image);
+
+                const selectGif = async () => {
+                    await sendGifUrl(sendUrl);
+                };
+
+                tile.addEventListener(
+                    'click',
+                    selectGif
+                );
+
+                tile.addEventListener(
+                    'keydown',
+                    event => {
+                        if (
+                            event.key === 'Enter' ||
+                            event.key === ' '
+                        ) {
+                            event.preventDefault();
+                            selectGif();
+                        }
+                    }
+                );
+
+                results.appendChild(tile);
+            }
+
+        } catch (error) {
+            console.error(
+                '[Nabris Chat] GIPHY',
+                error
+            );
+
+            results.replaceChildren(
+                createElement(
+                    'div',
+                    'nabris-chat-giphy-status',
+                    'Ricerca GIF non disponibile.'
+                )
             );
         }
     }
@@ -1059,11 +1435,23 @@
                 'nabris-chat-emoji-picker'
             );
 
+        const giphy =
+            document.getElementById(
+                'nabris-chat-giphy-panel'
+            );
+
         if (
             picker &&
             !picker.contains(event.target)
         ) {
             picker.classList.remove('open');
+        }
+
+        if (
+            giphy &&
+            !giphy.contains(event.target)
+        ) {
+            giphy.classList.remove('open');
         }
     });
 
