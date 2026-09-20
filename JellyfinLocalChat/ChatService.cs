@@ -4,69 +4,121 @@ using System.IO;
 using System.Linq;
 using System.Text.Json;
 
-namespace JellyfinLocalChat
+namespace JellyfinLocalChat;
+
+public sealed class ChatService
 {
-    public class ChatService
+    private const int MaxStoredMessages = 1000;
+
+    private readonly string _filePath;
+    private readonly object _sync = new();
+
+    private static readonly JsonSerializerOptions JsonOptions = new()
     {
-        private readonly string _filePath;
-        public List<ClientConnection> Clients = new();
-        public HashSet<string> TypingUsers = new();
+        WriteIndented = true,
+        PropertyNameCaseInsensitive = true
+    };
 
-        public ChatService(string dataPath)
+    public ChatService(string dataPath)
+    {
+        var directory = Path.Combine(dataPath, "NabrisChat");
+        Directory.CreateDirectory(directory);
+
+        _filePath = Path.Combine(directory, "chat.json");
+
+        if (!File.Exists(_filePath))
         {
-            _filePath = Path.Combine(dataPath, "chat.json");
-
-            if (!File.Exists(_filePath))
-                File.WriteAllText(_filePath, "[]");
+            File.WriteAllText(_filePath, "[]");
         }
+    }
 
-        public List<ChatMessage> GetMessages()
+    public IReadOnlyList<ChatMessage> GetMessages(int limit = 200)
+    {
+        lock (_sync)
         {
-            return JsonSerializer.Deserialize<List<ChatMessage>>(
-                File.ReadAllText(_filePath));
+            return LoadMessages()
+                .TakeLast(limit)
+                .ToList();
         }
+    }
 
-        public void SaveMessages(List<ChatMessage> messages)
+    public ChatMessage AddMessage(string username, string text)
+    {
+        lock (_sync)
         {
-            File.WriteAllText(_filePath,
-                JsonSerializer.Serialize(messages, new JsonSerializerOptions
-                {
-                    WriteIndented = true
-                }));
-        }
+            var messages = LoadMessages();
 
-        public ChatMessage AddMessage(string user, string text)
-        {
-            var messages = GetMessages();
-
-            var msg = new ChatMessage
+            var message = new ChatMessage
             {
-                Username = user,
-                Message = text
+                Username = username,
+                Message = text.Trim(),
+                Timestamp = DateTimeOffset.UtcNow
             };
 
-            messages.Add(msg);
+            messages.Add(message);
+
+            if (messages.Count > MaxStoredMessages)
+            {
+                messages = messages
+                    .TakeLast(MaxStoredMessages)
+                    .ToList();
+            }
+
             SaveMessages(messages);
 
-            return msg;
+            return message;
         }
+    }
 
-        public void DeleteMessage(Guid id)
+    public bool DeleteMessage(Guid id, string username, bool isAdministrator)
+    {
+        lock (_sync)
         {
-            var messages = GetMessages();
-            var msg = messages.FirstOrDefault(m => m.Id == id);
+            var messages = LoadMessages();
 
-            if (msg != null)
+            var message = messages.FirstOrDefault(x => x.Id == id);
+
+            if (message is null)
             {
-                msg.Deleted = true;
-                msg.Message = "(deleted message)";
-                SaveMessages(messages);
+                return false;
             }
-        }
 
-        public List<string> GetOnlineUsers()
-        {
-            return Clients.Select(c => c.Username).Distinct().ToList();
+            if (!isAdministrator &&
+                !string.Equals(
+                    message.Username,
+                    username,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            message.Deleted = true;
+            message.Message = string.Empty;
+
+            SaveMessages(messages);
+
+            return true;
         }
+    }
+
+    private List<ChatMessage> LoadMessages()
+    {
+        var json = File.ReadAllText(_filePath);
+
+        return JsonSerializer.Deserialize<List<ChatMessage>>(
+                   json,
+                   JsonOptions)
+               ?? new List<ChatMessage>();
+    }
+
+    private void SaveMessages(List<ChatMessage> messages)
+    {
+        var json = JsonSerializer.Serialize(messages, JsonOptions);
+
+        var tempPath = _filePath + ".tmp";
+
+        File.WriteAllText(tempPath, json);
+
+        File.Move(tempPath, _filePath, true);
     }
 }
