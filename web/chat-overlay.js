@@ -44,44 +44,34 @@
         return apiClient.getUrl(path.replace(/^\/+/, ''));
     }
 
-    function getHeaders(json = false) {
-        const headers = new Headers(
-            typeof apiClient.getDefaultHeaders === 'function'
-                ? apiClient.getDefaultHeaders()
-                : {}
-        );
-
-        if (json) {
-            headers.set('Content-Type', 'application/json');
-        }
-
-        return headers;
-    }
-
     async function request(path, options = {}) {
-        const response = await fetch(apiUrl(path), {
-            method: options.method || 'GET',
-            headers: getHeaders(Boolean(options.json)),
-            body: options.json
-                ? JSON.stringify(options.json)
-                : undefined,
-            credentials: 'same-origin',
-            cache: 'no-store'
-        });
+        const url = apiUrl(path);
+        const method = (options.method || 'GET').toUpperCase();
 
-        if (!response.ok) {
-            const body = await response.text().catch(() => '');
-
-            throw new Error(
-                `Nabris Chat API ${response.status}: ${body}`
-            );
+        if (method === 'GET') {
+            return apiClient.getJSON(url);
         }
 
-        if (response.status === 204) {
-            return null;
+        if (method === 'POST') {
+            return apiClient.ajax({
+                url,
+                type: 'POST',
+                data: JSON.stringify(options.json || {}),
+                contentType: 'application/json',
+                dataType: 'json'
+            });
         }
 
-        return response.json();
+        if (method === 'DELETE') {
+            return apiClient.ajax({
+                url,
+                type: 'DELETE'
+            });
+        }
+
+        throw new Error(
+            `Metodo HTTP non supportato da Nabris Chat: ${method}`
+        );
     }
 
     async function loadCurrentUser() {
